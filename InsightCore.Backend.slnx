@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="InsightCore.Api/InsightCore.Api.csproj" />
+  <Project Path="InsightCore.Application/InsightCore.Application.csproj" />
+  <Project Path="InsightCore.Domain/InsightCore.Domain.csproj" />
+  <Project Path="InsightCore.Functions/InsightCore.Functions.csproj" />
+  <Project Path="InsightCore.Infrastructure/InsightCore.Infrastructure.csproj" />
+  <Project Path="InsightCore.Shared/InsightCore.Shared.csproj" />
+  <Project Path="InsightCore.Worker/InsightCore.Worker.csproj" />
+</Solution>
