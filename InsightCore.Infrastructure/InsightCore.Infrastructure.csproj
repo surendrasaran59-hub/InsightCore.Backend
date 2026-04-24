@@ -7,7 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\InsightCore.Application\InsightCore.Application.csproj" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\InsightCore.Domain\InsightCore.Domain.csproj" />
     <ProjectReference Include="..\InsightCore.Shared\InsightCore.Shared.csproj" />
   </ItemGroup>
