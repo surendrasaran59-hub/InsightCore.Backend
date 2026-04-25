@@ -1,77 +1,93 @@
-﻿using DocumentFormat.OpenXml.Packaging;
+﻿using DocumentFormat.OpenXml.Math;
+using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using InsightCore.Infrastructure;
 using InsightCore.Shared;
-using System.ComponentModel.DataAnnotations;
+using Microsoft.Extensions.Configuration;
 using System.Globalization;
 using System.Text;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace InsightCore.Application
 {
     public class EntitySchemaGenerator: IEntitySchemaGenerator
     {
-        public string GenerateSchema(int clientId, int userId, string excelPath)
+        private readonly IConfiguration _config;
+        private readonly IDBExecution _dBExecution;
+
+        public EntitySchemaGenerator(IConfiguration config, IDBExecution dBExecution)
         {
-            if (!File.Exists(excelPath))
-                throw new ArgumentException("File Not Found");
+            _config = config;
+            _dBExecution = dBExecution;
+        }
+
+        public string GenerateSchema(int clientId, int userId, string blobName)
+        {
+            var errors = new List<string>();
+            string containerName = _config["MySettings:ContainerName"];
+            string connectionString = _config.GetConnectionString("BlobStorage");
 
             StringBuilder errorlist = new StringBuilder();
-            var errors = new List<string>();
-            Validate(excelPath, errors);
 
-            if (!errors.Any())
+            var memoryStream = ReadAzureBlob.BlobMemoryStream(connectionString, containerName, blobName);
+
+            using (SpreadsheetDocument document = SpreadsheetDocument.Open(memoryStream, false))
             {
-                var excelData = ReadExcel(excelPath);
-                string sqlScript = GenerateSql(excelData, clientId, userId);
+                Validate(document, errors);
 
-                DBExecution.ExecuteScript(sqlScript);
-            }
-            else
-            {
-                errorlist.AppendLine($"File processing failed due to data validation issues.\n");
-
-                foreach (var item in errors)
+                if (!errors.Any())
                 {
-                    errorlist.AppendLine($"\n" + item);
+                    var excelData = ReadExcel(document);
+                    string sqlScript = GenerateSql(excelData, clientId, userId);
+
+                    _dBExecution.ExecuteScript(sqlScript);
+                }
+                else
+                {
+                    errorlist.AppendLine($"File processing failed due to data validation issues.\n");
+
+                    foreach (var item in errors)
+                    {
+                        errorlist.AppendLine($"\n" + item);
+                    }
                 }
             }
 
             return errorlist.ToString();
         }
 
-        private List<DataModelExcelRow> ReadExcel(string path)
+        private List<DataModelExcelRow> ReadExcel(SpreadsheetDocument doc)
         {
             var list = new List<DataModelExcelRow>();
-            using (SpreadsheetDocument doc = SpreadsheetDocument.Open(path, false))
+
+            var workbookPart = doc.WorkbookPart;
+            var sheet = workbookPart.Workbook.Descendants<Sheet>().First();
+            var worksheetPart = (WorksheetPart)workbookPart.GetPartById(sheet.Id);
+            var sheetData = worksheetPart.Worksheet.Elements<SheetData>().First();
+
+            foreach (var row in sheetData.Elements<Row>().Skip(1))
             {
-                var workbookPart = doc.WorkbookPart;
-                var sheet = workbookPart.Workbook.Descendants<Sheet>().First();
-                var worksheetPart = (WorksheetPart)workbookPart.GetPartById(sheet.Id);
-                var sheetData = worksheetPart.Worksheet.Elements<SheetData>().First();
+                var cells = row.Elements<Cell>().ToList();
+                if (cells.Count < 10) continue;
 
-                foreach (var row in sheetData.Elements<Row>().Skip(1))
+                list.Add(new DataModelExcelRow
                 {
-                    var cells = row.Elements<Cell>().ToList();
-                    if (cells.Count < 10) continue;
+                    SN = GetCellValueByHeaderName("S/N", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    EntityName = GetCellValueByHeaderName("Entity Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    EntityDisplayName = GetCellValueByHeaderName("Entity Display Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    Module = GetCellValueByHeaderName("Module", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    SubjectArea = GetCellValueByHeaderName("Subject Area", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    AttributeName = GetCellValueByHeaderName("Attribute Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    AttributeDisplayName = GetCellValueByHeaderName("Attribute Display Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    DataType = GetCellValueByHeaderName("Data Type", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    Length = int.TryParse(GetCellValueByHeaderName("Len", doc, worksheetPart, sheetData, row.RowIndex.Value), out int len) ? len : (int?)null,
+                    IsNullable = GetCellValueByHeaderName("Null?", doc, worksheetPart, sheetData, row.RowIndex.Value).ToLower() == "yes",
+                    PKType = GetCellValueByHeaderName("PK?", doc, worksheetPart, sheetData, row.RowIndex.Value),
+                    Definition = cells.Count > 11 ? GetCellValueByHeaderName("Attribute Definition", doc, worksheetPart, sheetData, row.RowIndex.Value) : ""
+                });
 
-                    list.Add(new DataModelExcelRow
-                    {
-                        SN = GetCellValueByHeaderName("S/N", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        EntityName = GetCellValueByHeaderName("Entity Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        EntityDisplayName = GetCellValueByHeaderName("Entity Display Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        Module = GetCellValueByHeaderName("Module", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        SubjectArea = GetCellValueByHeaderName("Subject Area", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        AttributeName = GetCellValueByHeaderName("Attribute Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        AttributeDisplayName = GetCellValueByHeaderName("Attribute Display Name", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        DataType = GetCellValueByHeaderName("Data Type", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        Length = int.TryParse(GetCellValueByHeaderName("Len", doc, worksheetPart, sheetData, row.RowIndex.Value), out int len) ? len : (int?)null,
-                        IsNullable = GetCellValueByHeaderName("Null?", doc, worksheetPart, sheetData, row.RowIndex.Value).ToLower() == "yes",
-                        PKType = GetCellValueByHeaderName("PK?", doc, worksheetPart, sheetData, row.RowIndex.Value),
-                        Definition = cells.Count > 11 ? GetCellValueByHeaderName("Attribute Definition", doc, worksheetPart, sheetData, row.RowIndex.Value) : ""
-                    });
-
-                }
             }
+
             return list;
         }
 
@@ -124,11 +140,13 @@ namespace InsightCore.Application
             sql.AppendLine($"FROM AttributeSchema ads WHERE ads.ClientID = {clientId};");
             */
 
-            sql.AppendLine("COMMIT TRANSACTION;");
             sql.AppendLine("\n------------------------------------------");
 
             // Final Call for Hierarchy Resolution
             sql.AppendLine($"EXEC dbo.usp_ResolveMDMHierarchy @ClientID = {clientId}, @DimensionSchemaID = @NewDimensionSchemaID;");
+            sql.AppendLine("\n------------------------------------------");
+
+            sql.AppendLine("COMMIT TRANSACTION;");
 
             LogSteps("Resolving Entity Hierarchy");
 
@@ -181,7 +199,8 @@ namespace InsightCore.Application
             LogSteps("SQL Script Generation for Landing Tables Completed Successfully");
             LogSteps("Creating Landing Tables in Database Start");
 
-            DBExecution.ExecuteScript(lendingTableScript.ToString());
+            //DBExecution.ExecuteScript(lendingTableScript.ToString());
+            _dBExecution.ExecuteScript(lendingTableScript.ToString());
 
             LogSteps("Creating Landing Tables in Database Completed Successfully");
         }
@@ -269,18 +288,18 @@ namespace InsightCore.Application
 
         private void LogSteps(string message)
         {
-            Console.WriteLine(message);
+            //Console.WriteLine(message);
         }
 
         /*********************** VALIDATION ***************************/
 
-        private void Validate(string filePath, List<string> errors)
+        private void Validate(SpreadsheetDocument document, List<string> errors)
         {
-            ValidateRequiredColumns(filePath, errors);
+            ValidateRequiredColumns(document, errors);
 
             if (!errors.Contains("Missing required columns:"))
             {
-                var rows = ReadExcel(filePath);
+                var rows = ReadExcel(document);
 
                 //ValidateDuplicateEntities(rows, errors);
                 ValidateDuplicateAttributes(rows, errors);
@@ -289,7 +308,7 @@ namespace InsightCore.Application
             }
         }
 
-        private List<string> ValidateRequiredColumns(string filePath, List<string> errors)
+        private List<string> ValidateRequiredColumns(SpreadsheetDocument doc, List<string> errors)
         {
             var requiredColumns = new List<string>
             {
@@ -307,47 +326,44 @@ namespace InsightCore.Application
                 "Attribute Definition"
             };
 
-            using (var doc = SpreadsheetDocument.Open(filePath, false))
+            var wbPart = doc.WorkbookPart;
+            var sheet = wbPart.Workbook.Sheets.Elements<Sheet>().First();
+            var wsPart = (WorksheetPart)wbPart.GetPartById(sheet.Id);
+            var sheetData = wsPart.Worksheet.Elements<SheetData>().First();
+
+            var headerRow = sheetData.Elements<Row>().First();
+
+            var actualColumns = new List<string>();
+
+            foreach (var cell in headerRow.Elements<Cell>())
             {
-                var wbPart = doc.WorkbookPart;
-                var sheet = wbPart.Workbook.Sheets.Elements<Sheet>().First();
-                var wsPart = (WorksheetPart)wbPart.GetPartById(sheet.Id);
-                var sheetData = wsPart.Worksheet.Elements<SheetData>().First();
+                string value = GetVal(doc, cell)?.Trim();
+                if (!string.IsNullOrWhiteSpace(value))
+                    actualColumns.Add(value);
+            }
 
-                var headerRow = sheetData.Elements<Row>().First();
+            // Check missing columns
+            var missing = requiredColumns
+                .Where(rc => !actualColumns
+                    .Any(ac => ac.Equals(rc, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
-                var actualColumns = new List<string>();
+            if (missing.Any())
+            {
+                errors.Add("Missing required columns:");
+                errors.AddRange(missing.Select(m => $" - {m}"));
+            }
 
-                foreach (var cell in headerRow.Elements<Cell>())
-                {
-                    string value = GetVal(doc, cell)?.Trim();
-                    if (!string.IsNullOrWhiteSpace(value))
-                        actualColumns.Add(value);
-                }
+            // Optional: detect unexpected columns
+            var extra = actualColumns
+                .Where(ac => !requiredColumns
+                    .Any(rc => rc.Equals(ac, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
 
-                // Check missing columns
-                var missing = requiredColumns
-                    .Where(rc => !actualColumns
-                        .Any(ac => ac.Equals(rc, StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
-
-                if (missing.Any())
-                {
-                    errors.Add("Missing required columns:");
-                    errors.AddRange(missing.Select(m => $" - {m}"));
-                }
-
-                // Optional: detect unexpected columns
-                var extra = actualColumns
-                    .Where(ac => !requiredColumns
-                        .Any(rc => rc.Equals(ac, StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
-
-                if (extra.Any())
-                {
-                    errors.Add("Unexpected columns found:");
-                    errors.AddRange(extra.Select(e => $" - {e}"));
-                }
+            if (extra.Any())
+            {
+                errors.Add("Unexpected columns found:");
+                errors.AddRange(extra.Select(e => $" - {e}"));
             }
 
             return errors;

@@ -1,5 +1,6 @@
 using InsightCore.Api.Middleware;
 using InsightCore.Application;
+using InsightCore.Infrastructure;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Host.UseSerilog();
 
 builder.Services.AddScoped<IEntitySchemaGenerator, EntitySchemaGenerator>();
+builder.Services.AddScoped<IDBExecution, DBExecution>();
 
 // Add services to the container.
 

@@ -8,6 +8,6 @@ namespace InsightCore.Application
 {
     public interface IEntitySchemaGenerator
     {
-        string GenerateSchema(int clientId, int userId, string excelPath);
+        string GenerateSchema(int clientId, int userId, string blobName);
     }
 }

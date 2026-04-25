@@ -1,4 +1,5 @@
 ﻿using Microsoft.Data.SqlClient;
+using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -8,18 +9,24 @@ using System.Threading.Tasks;
 
 namespace InsightCore.Infrastructure
 {
-    public class DBExecution
+    public class DBExecution: IDBExecution
     {
-        private static string ConnectionString
+        private readonly IConfiguration _config;
+
+        public DBExecution(IConfiguration config)
+        {
+            _config = config;
+        }
+
+        private string ConnectionString
         {
             get
             {
-                string connectionString = "Server=tcp:incubitinsight.database.windows.net,1433;Initial Catalog=MMP;Persist Security Info=False;User ID=sqladmin;Password=incubitinsight@123;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
-                return connectionString;
+                return _config.GetConnectionString("SQLConnectionString");
             }
         }
 
-        public static void ExecuteScript(string sqlScript)
+        public void ExecuteScript(string sqlScript)
         {
             using (SqlConnection conn = new SqlConnection(ConnectionString))
             {
@@ -35,7 +42,7 @@ namespace InsightCore.Infrastructure
             }
         }
 
-        public static void ExecuteProcWithParameter(int clientId, int userId, string fileName, string fileStatus)
+        public void ExecuteProcWithParameter(int clientId, int userId, string fileName, string fileStatus)
         {
             using (SqlConnection conn = new SqlConnection(ConnectionString))
             {
