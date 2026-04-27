@@ -5,30 +5,21 @@ using InsightCore.Shared.Helpers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
 namespace InsightCore.Web.Pages.DataModel
 {
     public class UploadModel : PageModel
     {
-        // Allowed MIME types 
-        private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
-            "application/vnd.ms-excel",                                           // .xls
-            "text/csv",                                                            // .csv
-            "application/csv",
-            "text/plain",      // some browsers send this for .csv
-        };
 
         private readonly HttpClient _httpClient;
-        private readonly IBlobStorageService _blobStorageService;
         private readonly ILogger<UploadModel> _logger;
         private const long MaxFileSizeBytes = 50L * 1024 * 1024; // 50 MB
 
-        public UploadModel(IHttpClientFactory httpClientFactory, IBlobStorageService blobStorageService, ILogger<UploadModel> logger)
+        public UploadModel(IHttpClientFactory httpClientFactory, ILogger<UploadModel> logger)
         {
-            _httpClient = httpClientFactory.CreateClient();
-            _blobStorageService = blobStorageService;
+            _httpClient = httpClientFactory.CreateClient("InsightCoreApi");
             _logger = logger;
         }
 
@@ -63,57 +54,50 @@ namespace InsightCore.Web.Pages.DataModel
             {
                 ModelState.AddModelError(nameof(UploadFile), "File exceeds the 50 MB size limit.");
             }
-            else if (!AllowedMimeTypes.Contains(UploadFile.ContentType)) //MIME type validation
-            {
-                _logger.LogWarning("Upload rejected — disallowed MIME type: {Mime}", UploadFile.ContentType);
-                ModelState.AddModelError(nameof(UploadFile), $"File type '{UploadFile.ContentType}' is not allowed. Upload Excel (.xlsx/.xls) or CSV files only.");                
-            }
             else
             {
                 var ext = Path.GetExtension(UploadFile.FileName).ToLowerInvariant();
                 var allowed = new[] { ".csv", ".xls", ".xlsx" };
                 if (!allowed.Contains(ext))
                     ModelState.AddModelError(nameof(UploadFile), "Only CSV, XLS, or XLSX files are allowed.");
-
-                // Byte-stream (magic-byte) validation
-                await using var stream = UploadFile.OpenReadStream();
-                var (isValid, streamValidationError) = await UploadFileValidator.ValidateFileStreamAsync(stream, UploadFile.FileName);
-
-                if (!isValid)
-                {
-                    _logger.LogWarning("Upload rejected — stream validation failed for '{File}': {Reason}", UploadFile.FileName, streamValidationError);
-                    ModelState.AddModelError(nameof(UploadFile), streamValidationError);
-                    return Page();
-                }
             }
 
             if (!ModelState.IsValid)
                 return Page();
 
-            // Upload to Azure Blob Storage
             try
             {
-                int userId = 1;
-                var blobName = $"{SelectedClientId}/{Guid.NewGuid()}_{UploadFile.FileName}";
+                    int userId = 1;
+                    //var blobName = $"{SelectedClientId}/{Guid.NewGuid()}_{UploadFile.FileName}";
 
-                await _blobStorageService.UploadFileAsync(
-                    containerName: "datamodel-uploads",
-                    blobName: blobName,
-                    stream: UploadFile.OpenReadStream(),
-                    contentType: UploadFile.ContentType
-                );
+                    var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile);
+                    if (!apiResponse.IsSuccessStatusCode)
+                    {
+                        var errorBody = await apiResponse.Content.ReadAsStringAsync();
+                        _logger.LogError("Upload API failed — Status: {StatusCode}, Body: {Body}", apiResponse.StatusCode, errorBody);
+                        ModelState.AddModelError(string.Empty, $"Schema generation request failed: {apiResponse.ReasonPhrase}");
+                        return Page();
+                    }
 
-                var newID = await InsertClientDataModelAsync(new ClientDataModel
-                {
-                    ClientId = SelectedClientId.Value,
-                    FileName = UploadFile.FileName,
-                    CreatedBy = userId,
-                    UploadStatus = "Uploaded",
-                    ProcessingStatus = "Pending"
-                });
+                    TempData["SuccessMessage"] = "File uploaded successfully!";
+                    _logger.LogInformation("Upload API called successfully for ClientId {ClientId}.", SelectedClientId.Value);
 
-                // call this method to generate the schema and store it in the database. 
-                //string result = _schemaGenerator.GenerateSchema(SelectedClientId.Value, userId, blobName);
+                    //await _blobStorageService.UploadFileAsync(
+                    //    containerName: "datamodel-uploads",
+                    //    blobName: blobName,
+                    //    stream: UploadFile.OpenReadStream(),
+                    //    contentType: UploadFile.ContentType
+                    //);
+
+                    var newID = await InsertClientDataModelAsync(new ClientDataModel
+                    {
+                        ClientId = SelectedClientId.Value,
+                        FileName = UploadFile.FileName,
+                        CreatedBy = userId,
+                        UploadStatus = "Uploaded",
+                        ProcessingStatus = "Pending"
+                    });
+                _logger.LogInformation("Entry has been made in the database for {ClientId}.", SelectedClientId.Value);
 
                 //var serviceBusClient = new ServiceBusClient(connectionString);
                 //var sender = serviceBusClient.CreateSender("validation-queue");
@@ -121,14 +105,15 @@ namespace InsightCore.Web.Pages.DataModel
                 //await sender.SendMessageAsync(message);
                 //return Ok();
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Blob upload failed for client {ClientId}", SelectedClientId);
-                ModelState.AddModelError(string.Empty, "File upload failed. Please try again.");
-                return Page();
-            }
+                catch (Exception ex)
+                {
+                    TempData["ErrorMessage"] = "File upload failed!";
 
-            Message = "File has been uploaded successfully. Now generating schema!!!";
+                    _logger.LogError(ex, "Blob upload failed for client {ClientId}", SelectedClientId);
+                    ModelState.AddModelError(string.Empty, "File upload failed. Please try again.");
+                    return Page();
+                }
+
             return Page();
 
             // Handle file upload here
@@ -137,7 +122,7 @@ namespace InsightCore.Web.Pages.DataModel
 
         private async Task<List<SelectListItem>> LoadClientsAsync()
         {
-            var clients = await _httpClient.GetFromJsonAsync<List<ClientDto>>("https://localhost:7226/api/client/getclients") ?? new();
+            var clients = await _httpClient.GetFromJsonAsync<List<ClientDto>>("api/client/getclients") ?? new();
             return clients.Select(c => new SelectListItem
             {
                 Value = c.ClientId.ToString(),
@@ -145,10 +130,27 @@ namespace InsightCore.Web.Pages.DataModel
             }).ToList();
         }
 
+        private async Task<HttpResponseMessage> CallUploadApiAsync(int clientId, IFormFile file, CancellationToken cancellationToken = default)
+        {
+            using var content = new MultipartFormDataContent();
+
+            // Add clientId
+            content.Add(new StringContent(clientId.ToString()), "clientId");
+
+            // Add file
+            using var stream = file.OpenReadStream();
+            var fileContent = new StreamContent(stream);
+            fileContent.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
+
+            content.Add(fileContent, "file", file.FileName);
+
+            return await _httpClient.PostAsync("api/datamodel/upload", content, cancellationToken);
+        }
+
         private async Task<int> InsertClientDataModelAsync(ClientDataModel clientDataModel)
         {
-            var response = await _httpClient.PostAsJsonAsync(
-        "https://localhost:7226/api/client/clientDataModel", clientDataModel);
+            var response = await _httpClient.PostAsJsonAsync("api/client/clientDataModel", clientDataModel);
 
             response.EnsureSuccessStatusCode(); // throws HttpRequestException on 4xx/5xx
 

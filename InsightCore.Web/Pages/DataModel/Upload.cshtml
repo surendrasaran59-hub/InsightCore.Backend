@@ -7,8 +7,21 @@
 <h2>Client Upload</h2>
 @Html.AntiForgeryToken()
 
-<form method="post" enctype="multipart/form-data">
-    <label asp-for="Message" class="form-label"></label>
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<form method="post" enctype="multipart/form-data">    
     <div class="mb-3">
         <label asp-for="SelectedClientId" class="form-label">Client</label>
         <select asp-for="SelectedClientId" class="form-select" asp-items="Model.Clients">

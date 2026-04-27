@@ -7,19 +7,11 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace InsightCore.Api.Controllers
 {
-    /// <summary>
-    /// Handles data-model file uploads.
-    /// Pipeline:
-    ///   1. Receive multipart/form-data (clientId + file)
-    ///   2. Validate MIME type
-    ///   3. Validate file byte-stream magic bytes
-    ///   4. Delegate to IBlobStorageService (Infrastructure) to persist the file
-    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class DataModelUploadController : ControllerBase
     {
-        // ── Allowed MIME types ──────────────────────────────────────────────────
+        // Allowed MIME types 
         private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
@@ -36,16 +28,21 @@ namespace InsightCore.Api.Controllers
         // CSV = plain text; we validate it has at least one comma or is printable ASCII/UTF-8
 
         private readonly IBlobStorageService _blobStorage;
+        private readonly string _containerName;
         private readonly ILogger<DataModelUploadController> _logger;
-
-        private const long MaxFileSizeBytes = 50L * 1024 * 1024; // 50 MB
 
         public DataModelUploadController(
             IBlobStorageService blobStorage,
-            ILogger<DataModelUploadController> logger)
+            ILogger<DataModelUploadController> logger, 
+            IConfiguration configuration)
         {
-            _blobStorage = blobStorage;
-            _logger = logger;
+            _blobStorage = blobStorage ?? throw new ArgumentNullException(nameof(blobStorage));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+            _containerName = configuration.GetValue<string>("BlobStorage:ContainerName");
+
+            if (string.IsNullOrWhiteSpace(_containerName))
+                throw new InvalidOperationException("BlobStorage:ContainerName is missing in configuration.");
         }
 
         // ── POST /api/datamodelupload/upload ────────────────────────────────────
@@ -60,20 +57,10 @@ namespace InsightCore.Api.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Upload(
             [FromForm] int clientId,
-            IFormFile file,
+            [FromForm] IFormFile file,
             CancellationToken cancellationToken)
         {
-            // ── 1. Basic presence checks ────────────────────────────────────────
-            if (clientId <= 0)
-                return BadRequest(new { message = "A valid ClientID is required." });
-
-            if (file is null || file.Length == 0)
-                return BadRequest(new { message = "No file was received or the file is empty." });
-
-            if (file.Length > MaxFileSizeBytes)
-                return BadRequest(new { message = "File exceeds the 50 MB size limit." });
-
-            // ── 2. MIME type validation ─────────────────────────────────────────
+            // 1.. MIME type validation 
             if (!AllowedMimeTypes.Contains(file.ContentType))
             {
                 _logger.LogWarning("Upload rejected — disallowed MIME type: {Mime}", file.ContentType);
@@ -81,7 +68,7 @@ namespace InsightCore.Api.Controllers
                     new { message = $"File type '{file.ContentType}' is not allowed. Upload Excel (.xlsx/.xls) or CSV files only." });
             }
 
-            // ── 3. Byte-stream (magic-byte) validation ──────────────────────────
+            // 2. Byte-stream (magic-byte) validation 
             await using var stream = file.OpenReadStream();
             var (isValid, streamValidationError) = await ValidateFileStreamAsync(stream, file.FileName, cancellationToken);
 
@@ -94,13 +81,13 @@ namespace InsightCore.Api.Controllers
             // Reset stream position after validation reads
             stream.Seek(0, SeekOrigin.Begin);
 
-            // ── 4. Delegate to Blob Storage ─────────────────────────────────────
+            // 3. Delegate to Blob Storage
             try
             {
                 var blobName = BuildBlobName(clientId, file.FileName);
 
                 var blobUri = await _blobStorage.UploadFileAsync(
-                    containerName: "client-uploads",
+                    containerName: _containerName, //"datamodel-uploads",
                     blobName: blobName,
                     stream: stream,
                     contentType: file.ContentType,
@@ -109,10 +96,6 @@ namespace InsightCore.Api.Controllers
                 _logger.LogInformation(
                     "File '{BlobName}' uploaded for ClientID {ClientId}. URI: {Uri}",
                     blobName, clientId, blobUri);
-
-                //var blobClient = new BlobClient(connectionString, "uploads", $"{clientId}/{file.FileName}");
-                //await using var stream = file.OpenReadStream();
-                //await blobClient.UploadAsync(stream);
 
                 //var serviceBusClient = new ServiceBusClient(connectionString);
                 //var sender = serviceBusClient.CreateSender("validation-queue");
