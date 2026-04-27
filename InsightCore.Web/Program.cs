@@ -1,7 +1,15 @@
+using InsightCore.Application.Interfaces;
+using InsightCore.Infrastructure.Implementations;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
+builder.Services.AddHttpClient("InsightCore.Api", client =>
+{
+    client.BaseAddress = new Uri("https://localhost:7226/");
+});
 
 var app = builder.Build();
 

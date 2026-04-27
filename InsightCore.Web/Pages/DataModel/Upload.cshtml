@@ -1,0 +1,28 @@
+﻿@page
+@model InsightCore.Web.Pages.DataModel.UploadModel
+@{
+    ViewData["Title"] = "Client Upload";
+}
+
+<h2>Client Upload</h2>
+@Html.AntiForgeryToken()
+
+<form method="post" enctype="multipart/form-data">
+    <label asp-for="Message" class="form-label"></label>
+    <div class="mb-3">
+        <label asp-for="SelectedClientId" class="form-label">Client</label>
+        <select asp-for="SelectedClientId" class="form-select" asp-items="Model.Clients">
+            <option value="">-- Select Client --</option>
+        </select>
+        <span asp-validation-for="SelectedClientId" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="UploadFile" class="form-label">Upload File</label>
+        <input asp-for="UploadFile" class="form-control" type="file" accept=".csv,.xls,.xlsx" />
+        <span asp-validation-for="UploadFile" class="text-danger"></span>
+        <small class="form-text text-muted">Only CSV, XLS, or XLSX files are allowed.</small>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>

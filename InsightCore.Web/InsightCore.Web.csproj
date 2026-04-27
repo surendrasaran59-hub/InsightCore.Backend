@@ -6,4 +6,14 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Controllers\" />
+    <Folder Include="Views\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\InsightCore.Application\InsightCore.Application.csproj" />
+    <ProjectReference Include="..\InsightCore.Infrastructure\InsightCore.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

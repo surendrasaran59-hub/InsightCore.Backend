@@ -1,5 +1,7 @@
-using Serilog;
 using InsightCore.Api.Middleware;
+using InsightCore.Application.Interfaces;
+using InsightCore.Infrastructure.Implementations;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,8 +18,6 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
-
-
 // Add services to the container.
 
 builder.Services.AddControllers();
@@ -25,6 +25,8 @@ builder.Services.AddRazorPages();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddScoped<IClientService, ClientService>();
+builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 
 var app = builder.Build();
 

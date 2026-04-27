@@ -5,5 +5,6 @@
   <Project Path="InsightCore.Functions/InsightCore.Functions.csproj" />
   <Project Path="InsightCore.Infrastructure/InsightCore.Infrastructure.csproj" />
   <Project Path="InsightCore.Shared/InsightCore.Shared.csproj" />
+  <Project Path="InsightCore.Web/InsightCore.Web.csproj" Id="7eabdf5b-b3c7-47d7-9c99-f209e0600565" />
   <Project Path="InsightCore.Worker/InsightCore.Worker.csproj" />
 </Solution>
