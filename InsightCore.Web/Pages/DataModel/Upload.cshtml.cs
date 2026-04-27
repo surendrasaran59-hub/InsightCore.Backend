@@ -145,7 +145,7 @@ namespace InsightCore.Web.Pages.DataModel
 
             content.Add(fileContent, "file", file.FileName);
 
-            return await _httpClient.PostAsync("api/datamodel/upload", content, cancellationToken);
+            return await _httpClient.PostAsync("api/datamodelupload/upload", content, cancellationToken);
         }
 
         private async Task<int> InsertClientDataModelAsync(ClientDataModel clientDataModel)
