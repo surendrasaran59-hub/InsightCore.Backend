@@ -29,7 +29,7 @@
         </select>
         <span asp-validation-for="SelectedClientId" class="text-danger"></span>
     </div>
-
+    <input type="hidden" id="SelectedClientName" name="SelectedClientName" value="@Model.SelectedClientName" />
     <div class="mb-3">
         <label asp-for="UploadFile" class="form-label">Upload File</label>
         <input asp-for="UploadFile" class="form-control" type="file" accept=".csv,.xls,.xlsx" />
@@ -39,3 +39,12 @@
 
     <button type="submit" class="btn btn-primary">Submit</button>
 </form>
+
+<script src="https://code.jquery.com/jquery-4.0.0.min.js"></script>
+<script>
+    $('#SelectedClientId').on('change', function () {
+        debugger;
+        var selectedText = $(this).find('option:selected').text();
+        $('#SelectedClientName').val($(this).val() ? selectedText : '');
+    });
+</script>

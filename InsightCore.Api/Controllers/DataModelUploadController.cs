@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Azure.Storage.Blobs;
 using InsightCore.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using InsightCore.Shared.Helpers;
 
 namespace InsightCore.Api.Controllers
 {
@@ -57,6 +58,8 @@ namespace InsightCore.Api.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Upload(
             [FromForm] int clientId,
+            [FromForm] string clientName,
+            [FromForm] int userId,
             [FromForm] IFormFile file,
             CancellationToken cancellationToken)
         {
@@ -84,7 +87,7 @@ namespace InsightCore.Api.Controllers
             // 3. Delegate to Blob Storage
             try
             {
-                var blobName = BuildBlobName(clientId, file.FileName);
+                var blobName = UploadFileValidator.BuildBlobName(clientId, clientName, file.FileName);
 
                 var blobUri = await _blobStorage.UploadFileAsync(
                     containerName: _containerName, //"datamodel-uploads",
@@ -189,15 +192,6 @@ namespace InsightCore.Api.Controllers
 
             return (true, null);
         }
-
-        private static string BuildBlobName(int clientId, string originalFileName)
-        {
-            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-            var safeName = Path.GetFileNameWithoutExtension(originalFileName)
-                               .Replace(" ", "_")
-                               .Replace("..", "_");
-            var ext = Path.GetExtension(originalFileName);
-            return $"client-{clientId}/{timestamp}_{safeName}{ext}";
-        }
+                
     }
 }

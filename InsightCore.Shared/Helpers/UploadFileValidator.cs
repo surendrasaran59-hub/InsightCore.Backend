@@ -75,6 +75,16 @@ namespace InsightCore.Shared.Helpers
 
             return (true, null);
         }
+
+        public static string BuildBlobName(int clientId, string clientName, string originalFileName)
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var safeName = Path.GetFileNameWithoutExtension(originalFileName)
+                               .Replace(" ", "_")
+                               .Replace("..", "_");
+            var ext = Path.GetExtension(originalFileName);
+            return $"client-{clientId}-{clientName}/{timestamp}_{safeName}{ext}";
+        }
     }
 
 }

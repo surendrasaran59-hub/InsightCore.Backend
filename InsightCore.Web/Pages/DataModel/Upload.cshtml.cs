@@ -30,6 +30,9 @@ namespace InsightCore.Web.Pages.DataModel
         public int? SelectedClientId { get; set; }
 
         [BindProperty]
+        public string? SelectedClientName { get; set; } = string.Empty;
+
+        [BindProperty]
         public IFormFile? UploadFile { get; set; }
 
         public List<SelectListItem> Clients { get; set; } = new();
@@ -67,37 +70,36 @@ namespace InsightCore.Web.Pages.DataModel
 
             try
             {
-                    int userId = 1;
-                    //var blobName = $"{SelectedClientId}/{Guid.NewGuid()}_{UploadFile.FileName}";
+                int userId = 1; // need to fix
+                string clientName = string.Empty;
+                if (!string.IsNullOrEmpty(SelectedClientName))
+                {
+                    clientName = SelectedClientName;
+                }
 
-                    var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile);
-                    if (!apiResponse.IsSuccessStatusCode)
-                    {
-                        var errorBody = await apiResponse.Content.ReadAsStringAsync();
-                        _logger.LogError("Upload API failed — Status: {StatusCode}, Body: {Body}", apiResponse.StatusCode, errorBody);
-                        ModelState.AddModelError(string.Empty, $"Schema generation request failed: {apiResponse.ReasonPhrase}");
-                        return Page();
-                    }
+                var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile, clientName, userId);
+                if (!apiResponse.IsSuccessStatusCode)
+                {
+                    var errorBody = await apiResponse.Content.ReadAsStringAsync();
+                    _logger.LogError("Upload API failed — Status: {StatusCode}, Body: {Body}", apiResponse.StatusCode, errorBody);
+                    ModelState.AddModelError(string.Empty, $"Schema generation request failed: {apiResponse.ReasonPhrase}");
+                    return Page();
+                }
 
-                    TempData["SuccessMessage"] = "File uploaded successfully!";
-                    _logger.LogInformation("Upload API called successfully for ClientId {ClientId}.", SelectedClientId.Value);
+                var blobName = UploadFileValidator.BuildBlobName(SelectedClientId.Value, clientName, UploadFile.FileName);
 
-                    //await _blobStorageService.UploadFileAsync(
-                    //    containerName: "datamodel-uploads",
-                    //    blobName: blobName,
-                    //    stream: UploadFile.OpenReadStream(),
-                    //    contentType: UploadFile.ContentType
-                    //);
+                var newID = await InsertClientDataModelAsync(new ClientDataModel
+                {
+                    ClientId = SelectedClientId.Value,
+                    FileName = blobName, //UploadFile.FileName,
+                    CreatedBy = userId,
+                    UploadStatus = "Uploaded",
+                    ProcessingStatus = "Pending"
+                });
 
-                    var newID = await InsertClientDataModelAsync(new ClientDataModel
-                    {
-                        ClientId = SelectedClientId.Value,
-                        FileName = UploadFile.FileName,
-                        CreatedBy = userId,
-                        UploadStatus = "Uploaded",
-                        ProcessingStatus = "Pending"
-                    });
-                _logger.LogInformation("Entry has been made in the database for {ClientId}.", SelectedClientId.Value);
+                TempData["SuccessMessage"] = "File uploaded successfully!";
+                _logger.LogInformation("Upload API called successfully for ClientId {ClientId}.", SelectedClientId.Value);
+
 
                 //var serviceBusClient = new ServiceBusClient(connectionString);
                 //var sender = serviceBusClient.CreateSender("validation-queue");
@@ -105,14 +107,14 @@ namespace InsightCore.Web.Pages.DataModel
                 //await sender.SendMessageAsync(message);
                 //return Ok();
             }
-                catch (Exception ex)
-                {
-                    TempData["ErrorMessage"] = "File upload failed!";
+            catch (Exception ex)
+            {
+                TempData["ErrorMessage"] = "File upload failed!";
 
-                    _logger.LogError(ex, "Blob upload failed for client {ClientId}", SelectedClientId);
-                    ModelState.AddModelError(string.Empty, "File upload failed. Please try again.");
-                    return Page();
-                }
+                _logger.LogError(ex, "Blob upload failed for client {ClientId}", SelectedClientId);
+                ModelState.AddModelError(string.Empty, "File upload failed. Please try again.");
+                return Page();
+            }
 
             return Page();
 
@@ -130,12 +132,16 @@ namespace InsightCore.Web.Pages.DataModel
             }).ToList();
         }
 
-        private async Task<HttpResponseMessage> CallUploadApiAsync(int clientId, IFormFile file, CancellationToken cancellationToken = default)
+        private async Task<HttpResponseMessage> CallUploadApiAsync(int clientId, IFormFile file, string clientName, int userId, CancellationToken cancellationToken = default)
         {
             using var content = new MultipartFormDataContent();
 
             // Add clientId
             content.Add(new StringContent(clientId.ToString()), "clientId");
+            // Add clientName
+            content.Add(new StringContent(clientName), "clientName");
+            // Add userId
+            content.Add(new StringContent(userId.ToString()), "userId");
 
             // Add file
             using var stream = file.OpenReadStream();
@@ -150,9 +156,10 @@ namespace InsightCore.Web.Pages.DataModel
 
         private async Task<int> InsertClientDataModelAsync(ClientDataModel clientDataModel)
         {
+
             var response = await _httpClient.PostAsJsonAsync("api/client/clientDataModel", clientDataModel);
 
-            response.EnsureSuccessStatusCode(); // throws HttpRequestException on 4xx/5xx
+            response.EnsureSuccessStatusCode(); 
 
             var newId = await response.Content.ReadFromJsonAsync<int>();
             return newId;

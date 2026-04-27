@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using InsightCore.Application.Interfaces;
 using InsightCore.Shared.DTO;
+using InsightCore.Shared.Helpers;
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
