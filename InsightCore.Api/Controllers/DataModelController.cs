@@ -1,4 +1,7 @@
-﻿using Azure.Storage.Blobs;
+﻿using InsightCore.Application;
+using InsightCore.Infrastructure;
+using Microsoft.AspNetCore.Http;
+using Azure.Storage.Blobs;
 using InsightCore.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -97,7 +100,7 @@ namespace InsightCore.Api.Controllers
                 var blobName = BuildBlobName(clientId, file.FileName);
 
                 var blobUri = await _blobStorage.UploadFileAsync(
-                    containerName: "datamodel-uploads",
+                    containerName: "client-uploads",
                     blobName: blobName,
                     stream: stream,
                     contentType: file.ContentType,

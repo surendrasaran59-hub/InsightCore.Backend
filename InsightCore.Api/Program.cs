@@ -1,4 +1,7 @@
 using InsightCore.Api.Middleware;
+using InsightCore.Application;
+using InsightCore.Infrastructure;
+using InsightCore.Api.Middleware;
 using InsightCore.Application.Interfaces;
 using InsightCore.Infrastructure.Implementations;
 using Serilog;
@@ -18,17 +21,22 @@ Log.Logger = new LoggerConfiguration()
 
 builder.Host.UseSerilog();
 
+builder.Services.AddScoped<IEntitySchemaGenerator, EntitySchemaGenerator>();
+builder.Services.AddScoped<IDBExecution, DBExecution>();
+
 // Add services to the container.
 
 builder.Services.AddControllers();
-builder.Services.AddRazorPages();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<IClientService, ClientService>();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionMiddleware>();
+
+Console.WriteLine(app.Environment.EnvironmentName);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -38,19 +46,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-app.UseMiddleware<GlobalExceptionMiddleware>();
-
 app.UseAuthorization();
 
-app.MapGet("/", context =>
-{
-    context.Response.Redirect("/Index");
-    return Task.CompletedTask;
-});
-
 app.MapControllers();
-
-app.MapRazorPages();
 
 app.Run();

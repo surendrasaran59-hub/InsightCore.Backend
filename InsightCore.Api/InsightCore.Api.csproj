@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Middleware\GlobalExceptionMiddleware.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="Logs\**" />
     <Content Remove="Logs\**" />
     <EmbeddedResource Remove="Logs\**" />
@@ -25,6 +29,10 @@
     <ProjectReference Include="..\InsightCore.Domain\InsightCore.Domain.csproj" />
     <ProjectReference Include="..\InsightCore.Infrastructure\InsightCore.Infrastructure.csproj" />
     <ProjectReference Include="..\InsightCore.Shared\InsightCore.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Logs\" />
   </ItemGroup>
 
 </Project>

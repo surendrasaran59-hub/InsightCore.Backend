@@ -12,5 +12,7 @@ namespace InsightCore.Application.Interfaces
 
         /// <summary>Returns a single client by ID, or null if not found.</summary>
         Task<ClientDto?> GetClientByIdAsync(int clientId, CancellationToken cancellationToken = default);
+
+        Task<int> InsertClientDataAsync(ClientDataModel clientDataModel, CancellationToken cancellationToken = default);
     }
 }

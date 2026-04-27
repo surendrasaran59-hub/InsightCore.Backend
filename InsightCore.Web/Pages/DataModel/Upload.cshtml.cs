@@ -1,3 +1,4 @@
+using DocumentFormat.OpenXml.Spreadsheet;
 using InsightCore.Application.Interfaces;
 using InsightCore.Shared.DTO;
 using InsightCore.Shared.Helpers;
@@ -9,7 +10,7 @@ namespace InsightCore.Web.Pages.DataModel
 {
     public class UploadModel : PageModel
     {
-        // ?? Allowed MIME types ??????????????????????????????????????????????????
+        // Allowed MIME types 
         private static readonly HashSet<string> AllowedMimeTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
@@ -22,13 +23,15 @@ namespace InsightCore.Web.Pages.DataModel
         private readonly HttpClient _httpClient;
         private readonly IBlobStorageService _blobStorageService;
         private readonly ILogger<UploadModel> _logger;
+        private readonly IEntitySchemaGenerator _schemaGenerator;   
         private const long MaxFileSizeBytes = 50L * 1024 * 1024; // 50 MB
 
-        public UploadModel(IHttpClientFactory httpClientFactory, IBlobStorageService blobStorageService, ILogger<UploadModel> logger)
+        public UploadModel(IHttpClientFactory httpClientFactory, IBlobStorageService blobStorageService, ILogger<UploadModel> logger, IEntitySchemaGenerator schemaGenerator)
         {
             _httpClient = httpClientFactory.CreateClient();
             _blobStorageService = blobStorageService;
             _logger = logger;
+            _schemaGenerator = schemaGenerator;
         }
 
         [BindProperty]
@@ -92,6 +95,7 @@ namespace InsightCore.Web.Pages.DataModel
             // Upload to Azure Blob Storage
             try
             {
+                int userId = 1;
                 var blobName = $"{SelectedClientId}/{Guid.NewGuid()}_{UploadFile.FileName}";
 
                 await _blobStorageService.UploadFileAsync(
@@ -100,6 +104,18 @@ namespace InsightCore.Web.Pages.DataModel
                     stream: UploadFile.OpenReadStream(),
                     contentType: UploadFile.ContentType
                 );
+
+                var newID = await InsertClientDataModelAsync(new ClientDataModel
+                {
+                    ClientId = SelectedClientId.Value,
+                    FileName = UploadFile.FileName,
+                    CreatedBy = userId,
+                    UploadStatus = "Uploaded",
+                    ProcessingStatus = "Pending"
+                });
+
+                // call this method to generate the schema and store it in the database. 
+                //string result = _schemaGenerator.GenerateSchema(SelectedClientId.Value, userId, blobName);
 
                 //var serviceBusClient = new ServiceBusClient(connectionString);
                 //var sender = serviceBusClient.CreateSender("validation-queue");
@@ -129,6 +145,17 @@ namespace InsightCore.Web.Pages.DataModel
                 Value = c.ClientId.ToString(),
                 Text = c.ClientName
             }).ToList();
+        }
+
+        private async Task<int> InsertClientDataModelAsync(ClientDataModel clientDataModel)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+        "https://localhost:7226/api/client/clientDataModel", clientDataModel);
+
+            response.EnsureSuccessStatusCode(); // throws HttpRequestException on 4xx/5xx
+
+            var newId = await response.Content.ReadFromJsonAsync<int>();
+            return newId;
         }
 
     }

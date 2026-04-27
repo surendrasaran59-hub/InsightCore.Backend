@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 builder.Services.AddScoped<IBlobStorageService, BlobStorageService>();
+//builder.Services.AddScoped<IEntitySchemaGenerator, EntitySchemaGenerator>();
 builder.Services.AddHttpClient("InsightCore.Api", client =>
 {
     client.BaseAddress = new Uri("https://localhost:7226/");

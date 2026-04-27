@@ -63,5 +63,47 @@ namespace InsightCore.Infrastructure.Implementations
             return await connection.QueryFirstOrDefaultAsync<ClientDto>(
                 new CommandDefinition(sql, new { ClientId = clientId }, cancellationToken: cancellationToken));
         }
+
+        public async Task<int> InsertClientDataAsync(
+    ClientDataModel clientDataModel,
+    CancellationToken cancellationToken = default)
+        {
+            const string sql = """
+        INSERT INTO MMP_Core.ClientDataModel
+               (ClientId,
+                FileName,
+                CreatedBy,
+                UploadStatus,
+                ProcessingStatus)
+        VALUES (@ClientId,
+                @FileName,
+                @CreatedBy,
+                @UploadStatus,
+                @ProcessingStatus);
+        SELECT CAST(SCOPE_IDENTITY() AS INT);
+        """;
+
+            var parameters = new DynamicParameters();
+            parameters.Add("@ClientId", clientDataModel.ClientId);
+            parameters.Add("@FileName", clientDataModel.FileName);
+            parameters.Add("@CreatedBy", clientDataModel.CreatedBy);
+            parameters.Add("@UploadStatus", clientDataModel.UploadStatus);
+            parameters.Add("@ProcessingStatus", clientDataModel.ProcessingStatus);
+
+            _logger.LogInformation(
+                "Inserting client data record for ClientId: {ClientId}, File: {FileName}.",
+                clientDataModel.ClientId,
+                clientDataModel.FileName);
+
+            await using var connection = new SqlConnection(_connectionString);
+
+            var newId = await connection.ExecuteScalarAsync<int>(
+                new CommandDefinition(
+                    sql,
+                    parameters,
+                    cancellationToken: cancellationToken));
+
+            return newId;
+        }
     }
 }
