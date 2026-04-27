@@ -23,15 +23,13 @@ namespace InsightCore.Web.Pages.DataModel
         private readonly HttpClient _httpClient;
         private readonly IBlobStorageService _blobStorageService;
         private readonly ILogger<UploadModel> _logger;
-        private readonly IEntitySchemaGenerator _schemaGenerator;   
         private const long MaxFileSizeBytes = 50L * 1024 * 1024; // 50 MB
 
-        public UploadModel(IHttpClientFactory httpClientFactory, IBlobStorageService blobStorageService, ILogger<UploadModel> logger, IEntitySchemaGenerator schemaGenerator)
+        public UploadModel(IHttpClientFactory httpClientFactory, IBlobStorageService blobStorageService, ILogger<UploadModel> logger)
         {
             _httpClient = httpClientFactory.CreateClient();
             _blobStorageService = blobStorageService;
             _logger = logger;
-            _schemaGenerator = schemaGenerator;
         }
 
         [BindProperty]
@@ -99,7 +97,7 @@ namespace InsightCore.Web.Pages.DataModel
                 var blobName = $"{SelectedClientId}/{Guid.NewGuid()}_{UploadFile.FileName}";
 
                 await _blobStorageService.UploadFileAsync(
-                    containerName: "client-uploads",
+                    containerName: "datamodel-uploads",
                     blobName: blobName,
                     stream: UploadFile.OpenReadStream(),
                     contentType: UploadFile.ContentType
