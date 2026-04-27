@@ -1,11 +1,13 @@
 ﻿using DocumentFormat.OpenXml.Math;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
 using DocumentFormat.OpenXml.Spreadsheet;
 using InsightCore.Infrastructure;
 using InsightCore.Shared;
 using Microsoft.Extensions.Configuration;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace InsightCore.Application
@@ -23,37 +25,50 @@ namespace InsightCore.Application
 
         public string GenerateSchema(int clientId, int userId, string blobName)
         {
-            var errors = new List<string>();
-            string containerName = _config["MySettings:ContainerName"];
-            string connectionString = _config.GetConnectionString("BlobStorage");
+            StringBuilder message = new StringBuilder();
 
-            StringBuilder errorlist = new StringBuilder();
-
-            var memoryStream = ReadAzureBlob.BlobMemoryStream(connectionString, containerName, blobName);
-
-            using (SpreadsheetDocument document = SpreadsheetDocument.Open(memoryStream, false))
+            try
             {
-                Validate(document, errors);
+                _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'InProgress'");
 
-                if (!errors.Any())
+                var errors = new List<string>();
+                string containerName = _config["MySettings:ContainerName"];
+                string connectionString = _config.GetConnectionString("BlobStorage");
+
+                var memoryStream = ReadAzureBlob.BlobMemoryStream(connectionString, containerName, blobName);
+
+                using (SpreadsheetDocument document = SpreadsheetDocument.Open(memoryStream, false))
                 {
-                    var excelData = ReadExcel(document);
-                    string sqlScript = GenerateSql(excelData, clientId, userId);
+                    Validate(document, errors);
 
-                    _dBExecution.ExecuteScript(sqlScript);
-                }
-                else
-                {
-                    errorlist.AppendLine($"File processing failed due to data validation issues.\n");
-
-                    foreach (var item in errors)
+                    if (!errors.Any())
                     {
-                        errorlist.AppendLine($"\n" + item);
+                        var excelData = ReadExcel(document);
+                        string sqlScript = GenerateSql(excelData, clientId, userId);
+
+                        _dBExecution.ExecuteScript(sqlScript);
+
+                        message.AppendLine($"File processed successfully. Database schema has been created.\n");
+                        _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'Success'");
+                    }
+                    else
+                    {
+                        message.AppendLine($"File processing failed due to data validation issues.\n");
+
+                        foreach (var item in errors)
+                        {
+                            message.AppendLine($"\n" + item);
+                        }
                     }
                 }
             }
+            catch(Exception ex)
+            {
+                _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'Failed'");
+                throw new Exception($"File uploaded successfully, but processing failed. Please review the file and try again.\n");
+            }
 
-            return errorlist.ToString();
+            return message.ToString();
         }
 
         private List<DataModelExcelRow> ReadExcel(SpreadsheetDocument doc)
@@ -115,8 +130,25 @@ namespace InsightCore.Application
 
             foreach (var e in entities)
             {
-                sql.AppendLine($"INSERT INTO MMP_Core.EntitySchema (ClientID, DimensionSchemaID, EntitySchemaName, EntitySchemaDisplayName, DisplayOrder) ");
-                sql.AppendLine($"SELECT {clientId}, DimensionSchemaID, '{e.Key.EntityName}', '{e.Key.EntityDisplayName}', 0 FROM MMP_Core.DimensionSchema WHERE DimensionDisplayName = '{e.Key.SubjectArea}' AND ClientID = {clientId};");
+                //sql.AppendLine($"INSERT INTO MMP_Core.EntitySchema (ClientID, DimensionSchemaID, EntitySchemaName, EntitySchemaDisplayName, DisplayOrder) ");
+                //sql.AppendLine($"SELECT {clientId}, DimensionSchemaID, '{e.Key.EntityName}', '{e.Key.EntityDisplayName}', 0 FROM MMP_Core.DimensionSchema ds WHERE DimensionDisplayName = '{e.Key.SubjectArea}' AND ClientID = {clientId} AND NOT EXISTS (SELECT 1 FROM MMP_Core.EntitySchema es WHERE es.ClientID = {clientId} AND es.DimensionSchemaID = ds.DimensionSchemaID AND es.EntitySchemaName = '{e.Key.EntityName}');");
+
+                sql.AppendLine($"MERGE MMP_Core.EntitySchema AS target");
+                sql.AppendLine($"USING(");
+                sql.AppendLine($"SELECT {clientId} AS ClientID, ds.DimensionSchemaID, '{e.Key.EntityName}' AS EntitySchemaName, '{e.Key.EntityDisplayName}' AS EntitySchemaDisplayName, 0 AS DisplayOrder");
+                sql.AppendLine($"FROM MMP_Core.DimensionSchema ds");
+                sql.AppendLine($"WHERE ds.DimensionDisplayName = '{e.Key.SubjectArea}' AND ds.ClientID = {clientId}");
+                sql.AppendLine($") AS source");
+                sql.AppendLine($"ON target.ClientID = source.ClientID");
+                sql.AppendLine($"AND target.DimensionSchemaID = source.DimensionSchemaID");
+                sql.AppendLine($"AND target.EntitySchemaName = source.EntitySchemaName");
+                sql.AppendLine($"WHEN MATCHED THEN");
+                sql.AppendLine($"UPDATE SET");
+                sql.AppendLine($"EntitySchemaDisplayName = source.EntitySchemaDisplayName,");
+                sql.AppendLine($"DisplayOrder = source.DisplayOrder");
+                sql.AppendLine($"WHEN NOT MATCHED THEN");
+                sql.AppendLine($"INSERT(ClientID, DimensionSchemaID, EntitySchemaName, EntitySchemaDisplayName, DisplayOrder)");
+                sql.AppendLine($"VALUES(source.ClientID, source.DimensionSchemaID, source.EntitySchemaName, source.EntitySchemaDisplayName, source.DisplayOrder); ");
             }
 
             LogSteps("SQL Script for EntitySchema Generated");
@@ -124,10 +156,46 @@ namespace InsightCore.Application
             // 3. POPULATE AttributeSchema
             foreach (var row in data)
             {
-                sql.AppendLine($"INSERT INTO MMP_Core.AttributeSchema (ClientID, DimensionSchemaID, EntitySchemaID, AttributeName, AttributeDisplayName, DataType, DataTypeLength, IsNullable, PKType, AttributeDefinition, IsMandatory, ControlType) ");
-                sql.AppendLine($"SELECT {clientId}, ds.DimensionSchemaID, es.EntitySchemaID, '{row.AttributeName}', '{row.AttributeDisplayName}', '{GetDataTypeValue(row.PKType, row.DataType)}', {(row.Length.HasValue ? row.Length.Value.ToString() : "NULL")}, {(row.IsNullable ? 1 : 0)}, '{row.PKType}', '{row.Definition.Replace("'", "''")}', {(row.IsNullable ? 0 : 1)}, 'TextBox'");
-                sql.AppendLine($"FROM MMP_Core.EntitySchema es JOIN MMP_Core.DimensionSchema ds ON es.DimensionSchemaID = ds.DimensionSchemaID ");
-                sql.AppendLine($"WHERE es.EntitySchemaName = '{row.EntityName}' AND ds.DimensionDisplayName = '{row.SubjectArea}' AND es.ClientID = {clientId};");
+                //sql.AppendLine($"INSERT INTO MMP_Core.AttributeSchema (ClientID, DimensionSchemaID, EntitySchemaID, AttributeName, AttributeDisplayName, DataType, DataTypeLength, IsNullable, PKType, AttributeDefinition, IsMandatory, ControlType) ");
+                //sql.AppendLine($"SELECT {clientId}, ds.DimensionSchemaID, es.EntitySchemaID, '{row.AttributeName}', '{row.AttributeDisplayName}', '{GetDataTypeValue(row.PKType, row.DataType)}', {(row.Length.HasValue ? row.Length.Value.ToString() : "NULL")}, {(row.IsNullable ? 1 : 0)}, '{row.PKType}', '{row.Definition.Replace("'", "''")}', {(row.IsNullable ? 0 : 1)}, 'TextBox'");
+                //sql.AppendLine($"FROM MMP_Core.EntitySchema es JOIN MMP_Core.DimensionSchema ds ON es.DimensionSchemaID = ds.DimensionSchemaID ");
+                //sql.AppendLine($"WHERE es.EntitySchemaName = '{row.EntityName}' AND ds.DimensionDisplayName = '{row.SubjectArea}' AND es.ClientID = {clientId} AND NOT EXISTS (SELECT 1 FROM MMP_Core.AttributeSchema ats WHERE ats.ClientID = {clientId} AND ats.EntitySchemaID = es.EntitySchemaID AND ats.DimensionSchemaID = ds.DimensionSchemaID AND ats.AttributeName = '{row.AttributeName}');");
+
+                sql.AppendLine($"MERGE MMP_Core.AttributeSchema AS target ");
+                sql.AppendLine($"USING( ");
+                sql.AppendLine($"SELECT {clientId} AS ClientID, ds.DimensionSchemaID, es.EntitySchemaID, ");
+                sql.AppendLine($"'{row.AttributeName}' AS AttributeName, '{row.AttributeDisplayName}' AS AttributeDisplayName, ");
+                sql.AppendLine($"'{GetDataTypeValue(row.PKType, row.DataType)}' AS DataType, {(row.Length.HasValue ? row.Length.Value.ToString() : "NULL")} AS DataTypeLength, {(row.IsNullable ? 1 : 0)} AS IsNullable, ");
+                sql.AppendLine($"'{row.PKType}' AS PKType, '{row.Definition.Replace("'", "''")}' AS AttributeDefinition, ");
+                sql.AppendLine($" {(row.IsNullable ? 0 : 1)} AS IsMandatory, 'TextBox' AS ControlType ");
+                sql.AppendLine($"FROM MMP_Core.EntitySchema es ");
+                sql.AppendLine($"JOIN MMP_Core.DimensionSchema ds ON es.DimensionSchemaID = ds.DimensionSchemaID ");
+                sql.AppendLine($"WHERE es.EntitySchemaName = '{row.EntityName}' ");
+                sql.AppendLine($"AND ds.DimensionDisplayName = '{row.SubjectArea}' ");
+                sql.AppendLine($"AND es.ClientID = {clientId} ");
+                sql.AppendLine($") AS source ");
+                sql.AppendLine($"ON target.ClientID = source.ClientID ");
+                sql.AppendLine($"AND target.EntitySchemaID = source.EntitySchemaID ");
+                sql.AppendLine($"AND target.AttributeName = source.AttributeName ");
+                sql.AppendLine($"WHEN MATCHED THEN ");
+                sql.AppendLine($"UPDATE SET ");
+                sql.AppendLine($"AttributeDisplayName = source.AttributeDisplayName, ");
+                sql.AppendLine($"DataType = source.DataType, ");
+                sql.AppendLine($"DataTypeLength = source.DataTypeLength, ");
+                sql.AppendLine($"IsNullable = source.IsNullable, ");
+                sql.AppendLine($"PKType = source.PKType, ");
+                sql.AppendLine($"AttributeDefinition = source.AttributeDefinition, ");
+                sql.AppendLine($"IsMandatory = source.IsMandatory, ");
+                sql.AppendLine($"ControlType = source.ControlType ");
+                sql.AppendLine($"WHEN NOT MATCHED THEN ");
+                sql.AppendLine($"INSERT( ");
+                sql.AppendLine($"ClientID, DimensionSchemaID, EntitySchemaID, AttributeName, AttributeDisplayName, ");
+                sql.AppendLine($"DataType, DataTypeLength, IsNullable, PKType, AttributeDefinition, IsMandatory, ControlType ");
+                sql.AppendLine($") ");
+                sql.AppendLine($"VALUES( ");
+                sql.AppendLine($"source.ClientID, source.DimensionSchemaID, source.EntitySchemaID, source.AttributeName, source.AttributeDisplayName, ");
+                sql.AppendLine($"source.DataType, source.DataTypeLength, source.IsNullable, source.PKType, source.AttributeDefinition, source.IsMandatory, source.ControlType ");
+                sql.AppendLine($"); ");
             }
 
             LogSteps("SQL Script for AttributeSchema Generated");
@@ -305,6 +373,7 @@ namespace InsightCore.Application
                 ValidateDuplicateAttributes(rows, errors);
                 ValidateDataTypes(rows, errors);
                 ValidateForeignKeys(rows, errors);
+                ValidateInvalidCharacters(rows, errors);
             }
         }
 
@@ -369,7 +438,7 @@ namespace InsightCore.Application
             return errors;
         }
 
-        private static void ValidateDuplicateAttributes(List<DataModelExcelRow> rows, List<string> errors)
+        private void ValidateDuplicateAttributes(List<DataModelExcelRow> rows, List<string> errors)
         {
             var duplicates = rows
                 .GroupBy(r => new { r.EntityName, r.AttributeName })
@@ -381,7 +450,7 @@ namespace InsightCore.Application
             }
         }
 
-        private static void ValidateDataTypes(List<DataModelExcelRow> rows, List<string> errors)
+        private void ValidateDataTypes(List<DataModelExcelRow> rows, List<string> errors)
         {
             var validTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -410,7 +479,7 @@ namespace InsightCore.Application
             }
         }
 
-        private static void ValidateForeignKeys(List<DataModelExcelRow> rows, List<string> errors)
+        private void ValidateForeignKeys(List<DataModelExcelRow> rows, List<string> errors)
         {
             var bkSet = rows
                 .Where(r => r.PKType.Equals("BK1", StringComparison.OrdinalIgnoreCase))
@@ -428,6 +497,26 @@ namespace InsightCore.Application
                     errors.Add($"FK '{fk.AttributeName}' does not match any Parent Code - Dimension: '{fk.SubjectArea}', Entity Name: '{fk.EntityName}'");
                 }
             }
+        }
+
+        private void ValidateInvalidCharacters(List<DataModelExcelRow> rows, List<string> errors)
+        {
+            foreach (var row in rows)
+            {
+                if (!ValidateInvalidCharacters(row.SubjectArea))
+                    errors.Add($"Dimension Name contains invalid character(s) - Dimension: '{row.SubjectArea}'");
+
+                if (!ValidateInvalidCharacters(row.EntityName))
+                    errors.Add($"Entity Name contains invalid character(s) - Dimension: '{row.SubjectArea}', Entity Name: '{row.EntityName}'");
+
+                if (!ValidateInvalidCharacters(row.AttributeName))
+                    errors.Add($"Attribute Name contains invalid character(s) - Dimension: '{row.SubjectArea}', Entity Name: '{row.EntityName}', Attribute Name: {row.AttributeName}");
+            }
+        }
+
+        private bool ValidateInvalidCharacters(string input)
+        {
+            return Regex.IsMatch(input, @"^[A-Za-z0-9_]+$");
         }
     }
 }

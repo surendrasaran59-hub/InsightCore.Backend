@@ -25,10 +25,10 @@ namespace InsightCore.Api.Controllers
             string blobName = "GEO_Data_Dictionary_V2.xlsx";
             string result = _schemaGenerator.GenerateSchema(clientId, userId, blobName);
 
-            if (!string.IsNullOrWhiteSpace(result))
-                throw new ArgumentException(result);
+            //if (!string.IsNullOrWhiteSpace(result))
+            //    throw new ArgumentException(result);
 
-            result = string.IsNullOrWhiteSpace(result) ? "File processed successfully. Database schema has been created." : result;
+            //result = string.IsNullOrWhiteSpace(result) ? "File processed successfully. Database schema has been created." : result;
 
             return Ok(result);
         }
