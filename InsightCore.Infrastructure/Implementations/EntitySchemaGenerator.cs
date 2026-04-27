@@ -33,8 +33,8 @@ namespace InsightCore.Infrastructure.Implementations
                 _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'InProgress'");
 
                 var errors = new List<string>();
-                string containerName = _config["MySettings:ContainerName"];
-                string connectionString = _config.GetConnectionString("AzureStorage:ConnectionString");
+                string containerName = _config["BlobStorage:ContainerName"];
+                string connectionString = _config["AzureStorage:ConnectionString"];
 
                 var memoryStream = ReadAzureBlob.BlobMemoryStream(connectionString, containerName, blobName);
 

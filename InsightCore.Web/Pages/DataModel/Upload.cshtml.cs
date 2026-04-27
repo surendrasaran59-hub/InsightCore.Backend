@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace InsightCore.Web.Pages.DataModel
 {
@@ -77,15 +78,6 @@ namespace InsightCore.Web.Pages.DataModel
                     clientName = SelectedClientName;
                 }
 
-                var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile, clientName, userId);
-                if (!apiResponse.IsSuccessStatusCode)
-                {
-                    var errorBody = await apiResponse.Content.ReadAsStringAsync();
-                    _logger.LogError("Upload API failed — Status: {StatusCode}, Body: {Body}", apiResponse.StatusCode, errorBody);
-                    ModelState.AddModelError(string.Empty, $"Schema generation request failed: {apiResponse.ReasonPhrase}");
-                    return Page();
-                }
-
                 var blobName = UploadFileValidator.BuildBlobName(SelectedClientId.Value, clientName, UploadFile.FileName);
 
                 var newID = await InsertClientDataModelAsync(new ClientDataModel
@@ -97,7 +89,23 @@ namespace InsightCore.Web.Pages.DataModel
                     ProcessingStatus = "Pending"
                 });
 
-                TempData["SuccessMessage"] = "File uploaded successfully!";
+                var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile, clientName, userId);
+                if (!apiResponse.IsSuccessStatusCode)
+                {
+                    var errorBody = await apiResponse.Content.ReadAsStringAsync();
+                    _logger.LogError("Upload API failed — Status: {StatusCode}, Body: {Body}", apiResponse.StatusCode, errorBody);
+                    ModelState.AddModelError(string.Empty, $"Schema generation request failed: {apiResponse.ReasonPhrase}");
+                    return Page();
+                }
+
+                var apiResponseMsg = apiResponse.Content.ReadAsStringAsync().Result;
+
+                var result = JsonSerializer.Deserialize<UploadScehmaApiResponse>(apiResponseMsg, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+
+                TempData["SuccessMessage"] = result.message;
                 _logger.LogInformation("Upload API called successfully for ClientId {ClientId}.", SelectedClientId.Value);
 
 

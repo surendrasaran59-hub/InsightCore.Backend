@@ -5,6 +5,7 @@ using Azure.Storage.Blobs;
 using InsightCore.Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using InsightCore.Shared.Helpers;
+using DocumentFormat.OpenXml.Math;
 
 namespace InsightCore.Api.Controllers
 {
@@ -29,16 +30,19 @@ namespace InsightCore.Api.Controllers
         // CSV = plain text; we validate it has at least one comma or is printable ASCII/UTF-8
 
         private readonly IBlobStorageService _blobStorage;
+        private readonly IEntitySchemaGenerator _schemaGenerator;
         private readonly string _containerName;
         private readonly ILogger<DataModelUploadController> _logger;
 
         public DataModelUploadController(
             IBlobStorageService blobStorage,
             ILogger<DataModelUploadController> logger, 
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IEntitySchemaGenerator schemaGenerator)
         {
             _blobStorage = blobStorage ?? throw new ArgumentNullException(nameof(blobStorage));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _schemaGenerator = schemaGenerator ?? throw new ArgumentNullException(nameof(schemaGenerator));
 
             _containerName = configuration.GetValue<string>("BlobStorage:ContainerName");
 
@@ -100,6 +104,8 @@ namespace InsightCore.Api.Controllers
                     "File '{BlobName}' uploaded for ClientID {ClientId}. URI: {Uri}",
                     blobName, clientId, blobUri);
 
+                string schemaResult = _schemaGenerator.GenerateSchema(clientId, userId, blobName);
+
                 //var serviceBusClient = new ServiceBusClient(connectionString);
                 //var sender = serviceBusClient.CreateSender("validation-queue");
                 //var message = new ServiceBusMessage { Body = BinaryData.FromString(file.FileName), ApplicationProperties = { ["ClientId"] = clientId } };
@@ -108,7 +114,7 @@ namespace InsightCore.Api.Controllers
 
                 return Ok(new
                 {
-                    message = "File uploaded and validated successfully.",
+                    message = schemaResult,
                     blobUri,
                     blobName,
                     clientId
