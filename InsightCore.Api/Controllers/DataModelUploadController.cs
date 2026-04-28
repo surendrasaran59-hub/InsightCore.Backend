@@ -44,7 +44,7 @@ namespace InsightCore.Api.Controllers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _schemaGenerator = schemaGenerator ?? throw new ArgumentNullException(nameof(schemaGenerator));
 
-            _containerName = configuration.GetValue<string>("BlobStorage:ContainerName");
+            _containerName = configuration["insightcore-blob-container-dev"];
 
             if (string.IsNullOrWhiteSpace(_containerName))
                 throw new InvalidOperationException("BlobStorage:ContainerName is missing in configuration.");
@@ -64,6 +64,7 @@ namespace InsightCore.Api.Controllers
             [FromForm] int clientId,
             [FromForm] string clientName,
             [FromForm] int userId,
+            [FromForm] string blobName,
             [FromForm] IFormFile file,
             CancellationToken cancellationToken)
         {
@@ -91,8 +92,6 @@ namespace InsightCore.Api.Controllers
             // 3. Delegate to Blob Storage
             try
             {
-                var blobName = UploadFileValidator.BuildBlobName(clientId, clientName, file.FileName);
-
                 var blobUri = await _blobStorage.UploadFileAsync(
                     containerName: _containerName, //"datamodel-uploads",
                     blobName: blobName,

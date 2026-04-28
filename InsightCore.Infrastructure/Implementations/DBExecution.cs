@@ -23,7 +23,7 @@ namespace InsightCore.Infrastructure.Implementations
         {
             get
             {
-                return _config.GetConnectionString("DefaultConnection");
+                return _config["insightcore-db-dev"];
             }
         }
 

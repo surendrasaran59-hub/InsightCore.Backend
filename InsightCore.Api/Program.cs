@@ -1,12 +1,21 @@
-using InsightCore.Api.Middleware;
-using InsightCore.Application;
-using InsightCore.Infrastructure;
+using Azure.Identity;
 using InsightCore.Api.Middleware;
 using InsightCore.Application.Interfaces;
 using InsightCore.Infrastructure.Implementations;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
+//// Load Key Vault
+//var keyVaultName = builder.Configuration["KeyVaultName"];
+//var keyVaultUri = new Uri($"https://{keyVaultName}.vault.azure.net/");
+
+//builder.Configuration.AddAzureKeyVault(
+//    keyVaultUri,
+//    new DefaultAzureCredential()
+//);
+
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()

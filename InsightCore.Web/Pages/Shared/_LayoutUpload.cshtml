@@ -1,0 +1,41 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MDM Solutions — Home</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    </head>
+    <body>
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+      <a href="#" class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="1" width="7" height="7" rx="2" fill="white" fill-opacity="0.9"/>
+            <rect x="10" y="1" width="7" height="7" rx="2" fill="white" fill-opacity="0.5"/>
+            <rect x="1" y="10" width="7" height="7" rx="2" fill="white" fill-opacity="0.5"/>
+            <rect x="10" y="10" width="7" height="7" rx="2" fill="white" fill-opacity="0.9"/>
+          </svg>
+        </div>
+        <span class="logo-name"><span>MDM</span> Solutions</span>
+      </a>
+
+      <nav class="nav">
+        <a href="#" class="nav-item active">Home</a>
+        <a href="#" class="nav-item">Schema Explorer</a>
+      </nav>
+
+      <div class="topbar-right">
+        <div class="user-chip">
+          <div class="avatar">SA</div>
+          System Admin
+        </div>
+      </div>
+    </header>
+        <main class="page">
+            @RenderBody()
+        </main>
+    </body>
+</html>

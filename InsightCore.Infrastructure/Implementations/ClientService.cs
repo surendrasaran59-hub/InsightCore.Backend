@@ -19,8 +19,7 @@ namespace InsightCore.Infrastructure.Implementations
 
         public ClientService(IConfiguration configuration, ILogger<ClientService> logger)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not set.");
+            _connectionString = configuration["insightcore-db-dev"] ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not set.");               
             _logger = logger;
         }
 

@@ -1,0 +1,599 @@
+﻿@page
+@model InsightCore.Web.Pages.DataModel.UploadModel
+@{
+    ViewData["Title"] = "Client Upload";
+    Layout = "_LayoutUpload";
+}
+
+<h2>Client Upload</h2>
+@Html.AntiForgeryToken()
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success">
+        @TempData["SuccessMessage"]
+    </div>
+}
+
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["ErrorMessage"]
+    </div>
+}
+
+<style type="text/css">
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg-page: #F0F2F5;
+    --bg-card: #FFFFFF;
+    --bg-surface: #F7F8FA;
+    --bg-info: #EBF3FD;
+    --bg-success: #EAF5EF;
+    --text-primary: #1A1D23;
+    --text-secondary: #5A6070;
+    --text-tertiary: #9299A8;
+    --text-info: #185FA5;
+    --text-success: #176B3B;
+    --border: rgba(0,0,0,0.08);
+    --border-md: rgba(0,0,0,0.12);
+    --border-success: rgba(23,107,59,0.3);
+    --border-info: rgba(24,95,165,0.3);
+    --brand: #185FA5;
+    --brand-hover: #1370C2;
+    --brand-light: #EBF3FD;
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --font: 'DM Sans', system-ui, sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg-page);
+    min-height: 100vh;
+    color: var(--text-primary);
+  }
+
+  /* TOP BAR */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    height: 58px;
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    gap: 24px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--brand);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { width: 18px; height: 18px; }
+  .logo-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .logo-name span { color: var(--brand); }
+
+  .nav { display: flex; align-items: center; gap: 2px; margin-left: 8px; }
+  .nav-item {
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-decoration: none;
+    font-weight: 400;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-item:hover { background: var(--bg-surface); color: var(--text-primary); }
+  .nav-item.active { background: var(--brand-light); color: var(--brand); font-weight: 500; }
+
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; color: var(--text-secondary);
+    cursor: pointer; padding: 4px 10px 4px 4px;
+    border-radius: 50px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    transition: border-color 0.15s;
+  }
+  .user-chip:hover { border-color: var(--border-md); }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--brand); color: #fff;
+    font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* PAGE BODY */
+  .page { max-width: 860px; margin: 0 auto; padding: 48px 24px 64px; }
+
+  /* HERO */
+  .hero { text-align: center; margin-bottom: 40px; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--brand-light); color: var(--brand);
+    font-size: 11px; font-weight: 500;
+    padding: 4px 12px; border-radius: 50px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .hero-badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+  .hero-title { font-size: 30px; font-weight: 600; color: var(--text-primary); line-height: 1.25; margin-bottom: 10px; }
+  .hero-sub { font-size: 15px; color: var(--text-secondary); max-width: 460px; margin: 0 auto; line-height: 1.65; }
+
+  /* UPLOAD CARD */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 28px 28px 24px;
+    margin-bottom: 20px;
+  }
+  .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 22px; }
+  .card-step {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--brand-light); color: var(--brand);
+    font-size: 12px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .card-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .card-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 1px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  .field-label { font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; display: block; }
+
+  /* DROP ZONE */
+  .drop-zone {
+    border: 1.5px dashed rgba(24,95,165,0.35);
+    border-radius: var(--radius-lg);
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg-surface);
+    transition: all 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover { border-color: var(--brand); background: var(--brand-light); }
+  .drop-zone.dragover { border-color: var(--brand); background: var(--brand-light); transform: scale(1.01); }
+  .drop-zone.has-file { border-style: solid; border-color: var(--border-success); background: var(--bg-success); }
+
+  .drop-icon-wrap {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--bg-card); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 12px;
+    transition: background 0.2s;
+  }
+  .drop-zone.has-file .drop-icon-wrap { background: var(--bg-success); border-color: var(--border-success); }
+  .drop-icon-wrap svg { width: 20px; height: 20px; }
+
+  .drop-main { font-size: 13px; color: var(--text-primary); font-weight: 500; margin-bottom: 3px; }
+  .drop-main span { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; }
+  .drop-sub { font-size: 11px; color: var(--text-tertiary); }
+
+  .file-info {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg-success);
+    border: 1px solid var(--border-success);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-success);
+  }
+  .file-info.show { display: flex; }
+  .file-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+
+  /* CLIENT SELECT */
+  .select-wrap { position: relative; }
+  .select-wrap::after {
+    content: '';
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    width: 0; height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--text-tertiary);
+    pointer-events: none;
+  }
+  select {
+    width: 100%; height: 40px;
+    padding: 0 32px 0 12px;
+    font-family: var(--font); font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-card);
+    border: 1px solid var(--border-md);
+    border-radius: var(--radius-md);
+    appearance: none; cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(24,95,165,0.1); }
+  select:hover { border-color: rgba(0,0,0,0.2); }
+
+  .info-note {
+    margin-top: 12px;
+    background: var(--brand-light);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 12px; color: var(--text-secondary); line-height: 1.65;
+  }
+  .info-note strong { color: var(--brand); font-weight: 500; }
+
+  /* PROCESS BUTTON */
+  .btn-row { margin-top: 20px; }
+  .btn-process {
+    width: 100%; height: 44px;
+    background: var(--brand); color: #fff;
+    border: none; border-radius: var(--radius-md);
+    font-family: var(--font); font-size: 14px; font-weight: 500;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn-process:hover:not(:disabled) { background: var(--brand-hover); }
+  .btn-process:active:not(:disabled) { transform: scale(0.99); }
+  .btn-process:disabled {
+    background: var(--bg-surface); color: var(--text-tertiary);
+    border: 1px solid var(--border); cursor: not-allowed;
+  }
+
+  /* PROGRESS CARD */
+  .progress-card { display: none; }
+  .progress-card.show { display: block; }
+
+  .pbar-track { height: 4px; background: var(--bg-surface); border-radius: 2px; overflow: hidden; margin-bottom: 24px; }
+  .pbar-fill { height: 4px; background: var(--brand); border-radius: 2px; width: 0; transition: width 0.6s cubic-bezier(.4,0,.2,1); }
+
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step-item {
+    display: flex; align-items: center; gap: 14px;
+    font-size: 13px; color: var(--text-tertiary);
+    transition: color 0.2s;
+  }
+  .step-item.active { color: var(--text-primary); }
+  .step-item.done { color: var(--text-success); }
+  .step-dot {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid var(--border-md);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600; color: var(--text-tertiary);
+    background: var(--bg-card);
+    transition: all 0.2s;
+  }
+  .step-item.active .step-dot {
+    border-color: var(--brand); color: var(--brand);
+    background: var(--brand-light);
+    animation: ring-pulse 1.4s infinite;
+  }
+  .step-item.done .step-dot { border-color: var(--border-success); background: var(--bg-success); color: var(--text-success); }
+  @@keyframes ring-pulse {
+    0%,100%{ box-shadow: 0 0 0 0 rgba(24,95,165,0.2); }
+    50%{ box-shadow: 0 0 0 5px rgba(24,95,165,0); }
+  }
+  .step-spinner {
+    width: 12px; height: 12px; margin-left: auto;
+    border: 2px solid rgba(24,95,165,0.2);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    display: none;
+    animation: spin 0.8s linear infinite;
+  }
+  .step-item.active .step-spinner { display: block; }
+  @@keyframes spin { to { transform: rotate(360deg); } }
+
+  /* SUCCESS */
+  .success-box {
+    display: none; margin-top: 20px;
+    background: var(--bg-success);
+    border: 1px solid var(--border-success);
+    border-radius: var(--radius-lg);
+    padding: 24px; text-align: center;
+  }
+  .success-box.show { display: block; animation: fadeUp 0.4s ease; }
+  @@keyframes fadeUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: none; } }
+
+  .success-checkmark {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: var(--bg-success); border: 2px solid var(--border-success);
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 14px;
+  }
+  .success-checkmark svg { width: 22px; height: 22px; }
+  .success-title { font-size: 16px; font-weight: 600; color: var(--text-success); margin-bottom: 5px; }
+  .success-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 18px; line-height: 1.6; }
+  .btn-schema {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--brand); color: #fff;
+    padding: 10px 22px; border-radius: var(--radius-md);
+    font-family: var(--font); font-size: 13px; font-weight: 500;
+    border: none; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-schema:hover { background: var(--brand-hover); }
+
+  /* STATS */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 20px; }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px;
+  }
+  .stat-label { font-size: 11px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+  .stat-value { font-size: 26px; font-weight: 600; color: var(--text-primary); line-height: 1; margin-bottom: 4px; }
+  .stat-note { font-size: 12px; color: var(--text-secondary); }
+  .stat-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 2px 8px; border-radius: 50px; margin-top: 6px;
+  }
+  .stat-badge.up { background: var(--bg-success); color: var(--text-success); }
+
+  /* FOOTER */
+  .footer { text-align: center; margin-top: 48px; font-size: 12px; color: var(--text-tertiary); }
+</style>
+
+<!-- HERO -->
+<div class="hero">
+    <div class="hero-badge"><div class="hero-badge-dot"></div>Master Data Management</div>
+    <h1 class="hero-title">Welcome to MDM Solutions</h1>
+    <p class="hero-sub">Upload your data model to generate a schema. Supports multiple clients with isolated workspaces and full audit trails.</p>
+</div>
+
+<!-- UPLOAD CARD -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-step">1</div>
+        <div>
+            <div class="card-title">Upload data model</div>
+            <div class="card-subtitle">Select the file and the client this model belongs to</div>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data">
+        <div class="two-col">
+            <!-- DROP ZONE -->
+            <div>
+                <label asp-for="UploadFile" class="field-label">Data model file</label>
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <div class="drop-icon-wrap" id="dropIconWrap">
+                        <svg id="uploadIcon" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 3v11M5.5 8 10 3.5 14.5 8" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M3 15.5h14" stroke="#185FA5" stroke-width="1.5" stroke-linecap="round" />
+                        </svg>
+                        <svg id="checkIcon" style="display:none" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 10.5l4.5 4.5 7.5-8" stroke="#176B3B" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                    <div class="drop-main" id="dropMain"><span>Click to upload</span> or drag & drop</div>
+                    <div class="drop-sub" id="dropSub">.xlsx &nbsp;·&nbsp; .xls &nbsp;·&nbsp; .csv</div>
+                </div>
+                <input id="fileInput" asp-for="UploadFile" class="form-control" onchange="handleFile(this)" style="display:none" type="file" accept=".csv,.xls,.xlsx" />
+                <div class="file-info" id="fileInfo">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="10" height="12" rx="1.5" stroke="#176B3B" stroke-width="1.2" /><path d="M4.5 5h5M4.5 7.5h5M4.5 10h3" stroke="#176B3B" stroke-width="1.2" stroke-linecap="round" /></svg>
+                    <span class="file-name" id="fileName">—</span>
+                    <span id="fileSize" style="color:var(--text-tertiary);font-size:11px;margin-left:auto;flex-shrink:0"></span>
+                </div>
+                <span asp-validation-for="UploadFile" class="text-danger"></span>
+                <small class="form-text text-muted">Only CSV, XLS, or XLSX files are allowed.</small>
+            </div>
+
+            <!-- CLIENT + INFO -->
+            <div>
+                <label asp-for="SelectedClientId" class="field-label">Client</label>
+                <div class="select-wrap">
+                    <select asp-for="SelectedClientId" onchange="checkReady()" class="form-select" asp-items="Model.Clients">
+                        <option value="">Select a client…</option>
+                    </select>
+                    <span asp-validation-for="SelectedClientId" class="text-danger"></span>
+                    <input type="hidden" id="SelectedClientName" name="SelectedClientName" value="@Model.SelectedClientName" />
+                </div>
+                <div class="info-note">
+                    <strong>What happens after processing?</strong><br>
+                    Your file is uploaded to blob storage, the data model is persisted to the database, and a schema is generated for the selected client workspace.
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <button type="submit" class="btn-process" >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5 6.5-7" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                Process file &amp; generate schema
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- PROGRESS CARD -->
+<div class="card progress-card" id="progressCard">
+    <div class="card-header">
+        <div class="card-step" id="step2Num">2</div>
+        <div>
+            <div class="card-title" id="progressTitle">Processing your file…</div>
+            <div class="card-subtitle" id="progressSub">Please wait while the schema is being generated</div>
+        </div>
+    </div>
+
+    <div class="pbar-track"><div class="pbar-fill" id="pbarFill"></div></div>
+
+    <div class="steps">
+        <div class="step-item" id="s1">
+            <div class="step-dot" id="d1">1</div>
+            <span>Uploading file to blob storage</span>
+            <div class="step-spinner"></div>
+        </div>
+        <div class="step-item" id="s2">
+            <div class="step-dot" id="d2">2</div>
+            <span>Persisting data model to database</span>
+            <div class="step-spinner"></div>
+        </div>
+        <div class="step-item" id="s3">
+            <div class="step-dot" id="d3">3</div>
+            <span>Analysing model structure and relationships</span>
+            <div class="step-spinner"></div>
+        </div>
+        <div class="step-item" id="s4">
+            <div class="step-dot" id="d4">4</div>
+            <span>Generating schema definition</span>
+            <div class="step-spinner"></div>
+        </div>
+    </div>
+
+    <div class="success-box" id="successBox">
+        <div class="success-checkmark">
+            <svg viewBox="0 0 22 22" fill="none"><path d="M4 11.5l5 5 9-9" stroke="#176B3B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </div>
+        <div class="success-title">Schema generated successfully</div>
+        <div class="success-sub">Your schema is ready and available in the Schema Explorer.<br>You can now review, configure, and map your entities.</div>
+        <button class="btn-schema" onclick="window.location.href='#schema'">
+            Open Schema Explorer
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2.5 7h9M8.5 3.5l3 3.5-3 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+    </div>
+</div>
+
+<!-- STATS -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">Active clients</div>
+        <div class="stat-value">12</div>
+        <div class="stat-note">Across 3 regions</div>
+        <div class="stat-badge up">↑ 2 this month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Schemas generated</div>
+        <div class="stat-value">248</div>
+        <div class="stat-note">Last 30 days</div>
+        <div class="stat-badge up">↑ 18 this week</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg. process time</div>
+        <div class="stat-value">14s</div>
+        <div class="stat-note">Per data model</div>
+        <div class="stat-badge up">↓ 3s vs last month</div>
+    </div>
+</div>
+
+<div class="footer">MDM Solutions &nbsp;·&nbsp; v2.1.0 &nbsp;·&nbsp; &copy; 2025 All rights reserved</div>
+
+<script src="https://code.jquery.com/jquery-4.0.0.min.js"></script>
+<script>
+  // FILE HANDLING
+  function handleFile(input) {
+    const f = input.files[0];
+    if (!f) return;
+
+    const dz = document.getElementById('dropZone');
+    const dm = document.getElementById('dropMain');
+    const ds = document.getElementById('dropSub');
+    const fi = document.getElementById('fileInfo');
+    const fn = document.getElementById('fileName');
+    const fs = document.getElementById('fileSize');
+    const ui = document.getElementById('uploadIcon');
+    const ci = document.getElementById('checkIcon');
+
+    dz.classList.add('has-file');
+    dm.innerHTML = '<strong>' + f.name + '</strong>';
+    ds.textContent = formatBytes(f.size);
+    fi.classList.add('show');
+    fn.textContent = f.name;
+    fs.textContent = formatBytes(f.size);
+    ui.style.display = 'none';
+    ci.style.display = 'block';
+    checkReady();
+  }
+
+  function formatBytes(b) {
+    return b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+  }
+
+  function checkReady() {
+      debugger
+    const hasFile = document.getElementById('dropZone').classList.contains('has-file');
+    const hasClient = document.getElementById('clientSelect').value !== '';
+    document.getElementById('processBtn').disabled = !(hasFile && hasClient);
+  }
+
+  // DRAG & DROP
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      const inp = document.getElementById('fileInput');
+      inp.files = dt.files;
+      handleFile(inp);
+    }
+  });
+
+  // PROCESS FLOW
+  function startProcess() {
+    document.getElementById('processBtn').disabled = true;
+    const pc = document.getElementById('progressCard');
+    pc.classList.add('show');
+    pc.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    const steps = [1, 2, 3, 4];
+    const prog = [22, 48, 74, 100];
+    let i = 0;
+
+    function advance() {
+      if (i > 0) {
+        const prev = document.getElementById('s' + steps[i - 1]);
+        const prevDot = document.getElementById('d' + steps[i - 1]);
+        prev.classList.remove('active');
+        prev.classList.add('done');
+        prevDot.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6.5l3 3 5-6" stroke="#176B3B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+      }
+      if (i < steps.length) {
+        const cur = document.getElementById('s' + steps[i]);
+        const curDot = document.getElementById('d' + steps[i]);
+        cur.classList.add('active');
+        document.getElementById('pbarFill').style.width = prog[i] + '%';
+        i++;
+        setTimeout(advance, i === steps.length ? 900 : 1200);
+      } else {
+        setTimeout(() => {
+          document.getElementById('progressTitle').textContent = 'Schema ready';
+          document.getElementById('progressSub').textContent = 'All steps completed successfully';
+          document.getElementById('step2Num').style.background = 'var(--bg-success)';
+          document.getElementById('step2Num').style.color = 'var(--text-success)';
+          document.getElementById('step2Num').innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6.5l3 3 5-6" stroke="#176B3B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+          document.getElementById('successBox').classList.add('show');
+          document.getElementById('successBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 400);
+      }
+    }
+    advance();
+  }
+</script>
+<script>
+    $('#SelectedClientId').on('change', function () {
+        debugger;
+        var selectedText = $(this).find('option:selected').text();
+        $('#SelectedClientName').val($(this).val() ? selectedText : '');
+    });
+</script>

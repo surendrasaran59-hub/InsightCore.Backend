@@ -89,7 +89,7 @@ namespace InsightCore.Web.Pages.DataModel
                     ProcessingStatus = "Pending"
                 });
 
-                var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile, clientName, userId);
+                var apiResponse = await CallUploadApiAsync(SelectedClientId.Value, UploadFile, clientName, userId, blobName);
                 if (!apiResponse.IsSuccessStatusCode)
                 {
                     var errorBody = await apiResponse.Content.ReadAsStringAsync();
@@ -105,7 +105,11 @@ namespace InsightCore.Web.Pages.DataModel
                     PropertyNameCaseInsensitive = true
                 });
 
-                TempData["SuccessMessage"] = result.message;
+                if(result.message.Contains("success"))
+                    TempData["SuccessMessage"] = result.message;
+                else
+                    TempData["ErrorMessage"] = result.message;
+
                 _logger.LogInformation("Upload API called successfully for ClientId {ClientId}.", SelectedClientId.Value);
 
 
@@ -140,16 +144,14 @@ namespace InsightCore.Web.Pages.DataModel
             }).ToList();
         }
 
-        private async Task<HttpResponseMessage> CallUploadApiAsync(int clientId, IFormFile file, string clientName, int userId, CancellationToken cancellationToken = default)
+        private async Task<HttpResponseMessage> CallUploadApiAsync(int clientId, IFormFile file, string clientName, int userId, string blobName, CancellationToken cancellationToken = default)
         {
             using var content = new MultipartFormDataContent();
 
-            // Add clientId
             content.Add(new StringContent(clientId.ToString()), "clientId");
-            // Add clientName
             content.Add(new StringContent(clientName), "clientName");
-            // Add userId
             content.Add(new StringContent(userId.ToString()), "userId");
+            content.Add(new StringContent(blobName), "blobName");
 
             // Add file
             using var stream = file.OpenReadStream();

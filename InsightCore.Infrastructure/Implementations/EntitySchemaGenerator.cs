@@ -33,8 +33,8 @@ namespace InsightCore.Infrastructure.Implementations
                 _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'InProgress'");
 
                 var errors = new List<string>();
-                string containerName = _config["BlobStorage:ContainerName"];
-                string connectionString = _config["AzureStorage:ConnectionString"];
+                string containerName = _config["insightcore-blob-container-dev"];
+                string connectionString = _config["insightcore-blob-dev"];
 
                 var memoryStream = ReadAzureBlob.BlobMemoryStream(connectionString, containerName, blobName);
 
@@ -55,6 +55,7 @@ namespace InsightCore.Infrastructure.Implementations
                     else
                     {
                         message.AppendLine($"File processing failed due to data validation issues.\n");
+                        _dBExecution.ExecuteScript($"EXEC usp_UpdateClientDataModel {clientId},'{blobName}',{userId},'Failed'");
 
                         foreach (var item in errors)
                         {
@@ -355,6 +356,17 @@ namespace InsightCore.Infrastructure.Implementations
             return titleCase.Replace(" ", "");
         }
 
+        private static string ToTitleCase(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return input;
+
+            // Normalize spacing first
+            input = input.Trim().ToLower();
+
+            return CultureInfo.CurrentCulture.TextInfo.ToTitleCase(input);
+        }
+
         private void LogSteps(string message)
         {
             //Console.WriteLine(message);
@@ -371,11 +383,161 @@ namespace InsightCore.Infrastructure.Implementations
                 var rows = ReadExcel(document);
 
                 //ValidateDuplicateEntities(rows, errors);
+                EnforceRequiredFields(rows, errors);
                 ValidateDuplicateAttributes(rows, errors);
                 ValidateDataTypes(rows, errors);
                 ValidateForeignKeys(rows, errors);
                 ValidateInvalidCharacters(rows, errors);
+                ValidateEntityDisplayNames(document, errors);
             }
+        }
+
+        private void EnforceRequiredFields(List<DataModelExcelRow> rows, List<string> errors)
+        {
+            if (rows == null || rows.Count == 0)
+                return;
+
+            // Group by Entity
+            var grouped = rows
+                .Where(r => !string.IsNullOrWhiteSpace(r.EntityName))
+                .GroupBy(r => r.EntityName, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var group in grouped)
+            {
+                string entity = group.Key;
+                var entityRows = group.ToList();
+
+                // Use first row as template for metadata
+                var template = entityRows.First();
+
+                bool hasOID = entityRows.Any(r =>
+                    !string.IsNullOrWhiteSpace(r.AttributeName) &&
+                    r.AttributeName.Contains("OID", StringComparison.OrdinalIgnoreCase));
+
+                bool hasCODE = entityRows.Any(r =>
+                    !string.IsNullOrWhiteSpace(r.AttributeName) &&
+                    r.AttributeName.Contains("CODE", StringComparison.OrdinalIgnoreCase));
+
+                bool hasDateFrom = entityRows.Any(r =>
+                    string.Equals(r.AttributeName, "DATE_FROM", StringComparison.OrdinalIgnoreCase));
+
+                bool hasEndDate = entityRows.Any(r =>
+                    string.Equals(r.AttributeName, "END_DATE", StringComparison.OrdinalIgnoreCase));
+
+                // Helper to create new row
+                DataModelExcelRow CreateRow(string attributeName, string attributeDisplayName)
+                {
+                    return new DataModelExcelRow
+                    {
+                        SN = null, // optional: you can generate sequence later
+                        EntityName = template.EntityName,
+                        EntityDisplayName = template.EntityDisplayName,
+                        Module = template.Module,
+                        SubjectArea = template.SubjectArea,
+                        AttributeName = attributeName,
+                        AttributeDisplayName = attributeDisplayName,
+                        DataType = "string", // default (adjust if needed)
+                        Length = 50,
+                        IsNullable = false,
+                        PKType = null,
+                        Definition = $"Auto-generated field {attributeName}"
+                    };
+                }
+
+                // OID
+                if (!hasOID)
+                {
+                    string attr = $"{entity}_OID";
+                    rows.Add(CreateRow(attr, ToTitleCase(attr)));
+                    errors.Add($"Entity '{entity}' missing OID field. Added '{attr}'.");
+                }
+
+                // CODE
+                if (!hasCODE)
+                {
+                    string attr = $"{entity}_CODE";
+                    rows.Add(CreateRow(attr, ToTitleCase(attr)));
+                    errors.Add($"Entity '{entity}' missing CODE field. Added '{attr}'.");
+                }
+
+                // DATE_FROM
+                if (!hasDateFrom)
+                {
+                    rows.Add(CreateRow("DATE_FROM", "Date From"));
+                    errors.Add($"Entity '{entity}' missing DATE_FROM. Added.");
+                }
+
+                // END_DATE
+                if (!hasEndDate)
+                {
+                    rows.Add(CreateRow("END_DATE", "End Date"));
+                    errors.Add($"Entity '{entity}' missing END_DATE. Added.");
+                }
+            }
+        }
+
+        private List<string> ValidateEntityDisplayNames(SpreadsheetDocument doc, List<string> errors)
+        {
+            var workbookPart = doc.WorkbookPart;
+            var sheet = workbookPart.Workbook.Sheets.Elements<Sheet>().First();
+            var worksheetPart = (WorksheetPart)workbookPart.GetPartById(sheet.Id);
+            var sheetData = worksheetPart.Worksheet.GetFirstChild<SheetData>();
+
+            var rows = sheetData.Elements<Row>().ToList();
+
+            // Identify column indexes
+            var headerCells = rows[0].Elements<Cell>().ToList();
+
+            int entityNameCol = -1;
+            int displayNameCol = -1;
+
+            for (int i = 0; i < headerCells.Count; i++)
+            {
+                string header = GetVal(doc, headerCells[i]);
+
+                if (header == "Entity Name")
+                    entityNameCol = i;
+                else if (header == "Entity Display Name")
+                    displayNameCol = i;
+            }
+
+            if (entityNameCol == -1 || displayNameCol == -1)
+                throw new Exception("Required columns not found.");
+
+            // Dictionary: EntityName -> Set of normalized display names
+            var entityMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+            // Iterate rows (skip header)
+            for (int r = 1; r < rows.Count; r++)
+            {
+                var cells = rows[r].Elements<Cell>().ToList();
+
+                string entityName = GetVal(doc, cells.ElementAtOrDefault(entityNameCol));
+                string displayName = GetVal(doc, cells.ElementAtOrDefault(displayNameCol));
+
+                if (string.IsNullOrWhiteSpace(entityName) || string.IsNullOrWhiteSpace(displayName))
+                    continue;
+
+                string normalizedDisplay = ToTitleCase(displayName);
+
+                if (!entityMap.ContainsKey(entityName))
+                    entityMap[entityName] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                entityMap[entityName].Add(normalizedDisplay);
+            }
+
+            // Validation: detect multiple display names per entity
+            foreach (var kvp in entityMap)
+            {
+                if (kvp.Value.Count > 1)
+                {
+                    errors.Add(
+                        $"Entity '{kvp.Key}' has multiple display names: {string.Join(", ", kvp.Value)}"
+                    );
+                }
+            }
+
+            return errors;
         }
 
         private List<string> ValidateRequiredColumns(SpreadsheetDocument doc, List<string> errors)

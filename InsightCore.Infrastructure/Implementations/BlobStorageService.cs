@@ -21,7 +21,7 @@ namespace InsightCore.Infrastructure.Implementations
         {
             _logger = logger;
 
-            var connectionString = configuration["AzureStorage:ConnectionString"]
+            var connectionString = configuration["insightcore-blob-dev"]
                 ?? throw new InvalidOperationException(
                     "AzureStorage:ConnectionString is not configured. " +
                     "Add it to appsettings.json or Azure Key Vault.");
